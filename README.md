@@ -15,8 +15,10 @@
 <h1>GK Positioning Visualizer</h1>
 
 <div id="wrap">
-  <canvas id="top" width="700" height="450"></canvas>
-  <canvas id="front" width="350" height="450"></canvas>
+  <!-- 左：俯瞰図 -->
+  <canvas id="top" width="800" height="500"></canvas>
+  <!-- 右：ボール視点のゴール正面図 -->
+  <canvas id="front" width="350" height="500"></canvas>
 </div>
 
 <div id="state"></div>
@@ -31,22 +33,28 @@ const front = document.getElementById("front");
 const fctx = front.getContext("2d");
 const stateDiv = document.getElementById("state");
 
-const M = 5; // 1m = 5px（俯瞰図）
+// 俯瞰図スケール
+const M = 5; // 1m = 5px
 const pitchL = 105 * M;
 const pitchW = 68 * M;
+
+// ピッチをキャンバス中央に配置するためのオフセット
+const offsetX = 20; // 左余白
+const offsetY = (top.height - pitchW) / 2;
 
 // ゴール（俯瞰）
 const goalWidth = 7.32;      // m
 const goalHeight = 2.44;     // m
 const goalYCenter = pitchW / 2;
-const goalX = 5 * M;         // 左端から少し余白
+const goalX = offsetX + 0.5 * M; // 左端から少し余白
 
-const leftPost = { x: goalX, y: goalYCenter - (goalWidth * M) / 2 };
-const rightPost = { x: goalX, y: goalYCenter + (goalWidth * M) / 2 };
+// ゴールポスト（俯瞰）
+const leftPost = { x: goalX, y: offsetY + goalYCenter - (goalWidth * M) / 2 };
+const rightPost = { x: goalX, y: offsetY + goalYCenter + (goalWidth * M) / 2 };
 
 // ボール・GK（俯瞰）
-let ball = { x: goalX + 20 * M, y: goalYCenter }; // 20m前
-let gk   = { x: goalX + 6 * M,  y: goalYCenter }; // 6m前
+let ball = { x: goalX + 20 * M, y: offsetY + goalYCenter }; // 20m前
+let gk   = { x: goalX + 6 * M,  y: offsetY + goalYCenter }; // 6m前
 
 // 等身大設定
 const GK_HEIGHT = 1.75; // m
@@ -62,22 +70,28 @@ function normalize(v){ const l=Math.hypot(v.x,v.y); return {x:v.x/l,y:v.y/l}; }
 /* ============================
    俯瞰図描画
 ============================ */
-function drawTop(){
+function drawPitchTop(){
+  // 背景
   tctx.clearRect(0,0,top.width,top.height);
   tctx.fillStyle="#2e7d32";
   tctx.fillRect(0,0,top.width,top.height);
 
   // ピッチ枠
   tctx.strokeStyle="#fff";
-  tctx.strokeRect(0,(top.height-pitchW)/2,pitchL,pitchW);
+  tctx.lineWidth = 2;
+  tctx.strokeRect(offsetX, offsetY, pitchL, pitchW);
 
-  const offsetY = (top.height-pitchW)/2;
-
-  // ゴール
-  tctx.lineWidth=4;
+  // センターライン
   tctx.beginPath();
-  tctx.moveTo(leftPost.x, leftPost.y+offsetY);
-  tctx.lineTo(rightPost.x, rightPost.y+offsetY);
+  tctx.moveTo(offsetX + pitchL/2, offsetY);
+  tctx.lineTo(offsetX + pitchL/2, offsetY + pitchW);
+  tctx.stroke();
+
+  // センターサークル（半径9.15m）
+  const centerX = offsetX + pitchL/2;
+  const centerY = offsetY + pitchW/2;
+  tctx.beginPath();
+  tctx.arc(centerX, centerY, 9.15*M, 0, Math.PI*2);
   tctx.stroke();
 
   // ペナルティエリア
@@ -86,7 +100,7 @@ function drawTop(){
   tctx.strokeStyle="#ffffffaa";
   tctx.strokeRect(
     goalX,
-    goalYCenter - boxWidth/2 + offsetY,
+    offsetY + goalYCenter - boxWidth/2,
     boxDepth,
     boxWidth
   );
@@ -96,75 +110,125 @@ function drawTop(){
   const gaWidth = 18.32 * M;
   tctx.strokeRect(
     goalX,
-    goalYCenter - gaWidth/2 + offsetY,
+    offsetY + goalYCenter - gaWidth/2,
     gaDepth,
     gaWidth
   );
 
-  // シュートコース（ゴール4角 → ボール）
-  const goalTop = goalYCenter - (goalWidth * M)/2;
-  const goalBot = goalYCenter + (goalWidth * M)/2;
+  // ゴールライン（俯瞰）
+  tctx.strokeStyle="#fff";
+  tctx.lineWidth=4;
+  tctx.beginPath();
+  tctx.moveTo(leftPost.x, leftPost.y);
+  tctx.lineTo(rightPost.x, rightPost.y);
+  tctx.stroke();
+}
 
+/* ============================
+   シュートコース（4角→ボール）
+============================ */
+function drawShootingLinesTop(){
+  const goalTopY = offsetY + goalYCenter - (goalWidth * M)/2;
+  const goalBotY = offsetY + goalYCenter + (goalWidth * M)/2;
+
+  // ゴールの4つ角（俯瞰では上下2点のみだが、正面図で高さを扱う）
   tctx.strokeStyle="#ffeb3b";
   tctx.lineWidth=2;
   tctx.beginPath();
-  tctx.moveTo(ball.x, ball.y+offsetY);
-  tctx.lineTo(goalX, goalTop+offsetY);
-  tctx.moveTo(ball.x, ball.y+offsetY);
-  tctx.lineTo(goalX, goalBot+offsetY);
+  // 左下角（俯瞰では左ポスト下）
+  tctx.moveTo(ball.x, ball.y);
+  tctx.lineTo(goalX, goalTopY);
+  // 左上角（俯瞰では同じ位置だが、正面図で高さを扱う）
+  tctx.moveTo(ball.x, ball.y);
+  tctx.lineTo(goalX, goalBotY);
   tctx.stroke();
+}
 
-  // GK横ライン（シュートコース幅）
+/* ============================
+   GK横ライン（シュートコース幅）
+============================ */
+function drawGKHorizontalCoverageTop(){
+  const goalTopY = offsetY + goalYCenter - (goalWidth * M)/2;
+  const goalBotY = offsetY + goalYCenter + (goalWidth * M)/2;
+
   const yGK = gk.y;
+
   function intersect(postY){
     const dy = postY - ball.y;
     const dx = goalX - ball.x;
     const t = (yGK - ball.y)/dy;
     return { x: ball.x + dx*t, y: yGK };
   }
-  const p1 = intersect(goalTop);
-  const p2 = intersect(goalBot);
+
+  const p1 = intersect(goalTopY);
+  const p2 = intersect(goalBotY);
 
   tctx.strokeStyle="#e0f7fa";
   tctx.lineWidth=4;
   tctx.beginPath();
-  tctx.moveTo(p1.x, p1.y+offsetY);
-  tctx.lineTo(p2.x, p2.y+offsetY);
+  tctx.moveTo(p1.x, p1.y);
+  tctx.lineTo(p2.x, p2.y);
   tctx.stroke();
+}
 
-  // ボール
+/* ============================
+   ボール・GK（俯瞰）
+============================ */
+function drawBallTop(){
   tctx.fillStyle="red";
   tctx.beginPath();
-  tctx.arc(ball.x, ball.y+offsetY, (BALL_DIAM*M)/2, 0, Math.PI*2);
+  tctx.arc(ball.x, ball.y, (BALL_DIAM*M)/2, 0, Math.PI*2);
   tctx.fill();
+}
 
-  // GK（向きはボール方向）
+function drawGKTop(){
+  // GKはボールに正対（おへそがボール方向）
   const v = { x: ball.x - gk.x, y: ball.y - gk.y };
   const n = normalize(v);
   const angle = Math.atan2(n.y, n.x);
 
   const w = GK_WIDTH * M;
-  const h = GK_HEIGHT * M * 0.4; // 俯瞰なので高さを少しだけ表現
+  const h = GK_HEIGHT * M * 0.4; // 俯瞰なので高さは少しだけ表現
+
   tctx.save();
-  tctx.translate(gk.x, gk.y+offsetY);
+  tctx.translate(gk.x, gk.y);
   tctx.rotate(angle);
   tctx.fillStyle="#03a9f4";
   tctx.fillRect(-w/2,-h/2,w,h);
   tctx.restore();
+
+  // おへそ→ボールの線（正対のイメージ）
+  tctx.strokeStyle="#ffffffaa";
+  tctx.lineWidth=2;
+  tctx.beginPath();
+  tctx.moveTo(gk.x, gk.y);
+  tctx.lineTo(ball.x, ball.y);
+  tctx.stroke();
 }
 
 /* ============================
    3D→正面図への投影
 ============================ */
 function projectToGoalPlane(px, py, pz){
-  const cam = { x: ball.x/M, y: (ball.y - (top.height-pitchW)/2)/M, z: CAM_HEIGHT };
-  const pt  = { x: px/M, y: (py - (top.height-pitchW)/2)/M, z: pz };
+  // カメラ＝ボール位置＋高さ170cm
+  const cam = {
+    x: (ball.x - offsetX)/M,
+    y: (ball.y - offsetY)/M,
+    z: CAM_HEIGHT
+  };
 
-  const planeX = goalX/M;
+  const pt  = {
+    x: (px - offsetX)/M,
+    y: (py - offsetY)/M,
+    z: pz
+  };
+
+  const planeX = (goalX - offsetX)/M; // ゴール面 x
   const t = (planeX - cam.x) / (pt.x - cam.x);
   const y = cam.y + t*(pt.y - cam.y);
   const z = cam.z + t*(pt.z - cam.z);
 
+  // ゴール正面図座標へ変換
   const scaleY = front.height / (goalWidth*1.5);
   const scaleZ = front.height / (goalHeight*2.0);
 
@@ -177,7 +241,7 @@ function projectToGoalPlane(px, py, pz){
 /* ============================
    正面図描画
 ============================ */
-function drawFront(){
+function drawGoalFront(){
   fctx.clearRect(0,0,front.width,front.height);
   fctx.fillStyle="#000";
   fctx.fillRect(0,0,front.width,front.height);
@@ -196,27 +260,39 @@ function drawFront(){
   fctx.strokeStyle="#fff";
   fctx.lineWidth=2;
   fctx.beginPath();
+  // 左ポスト（正面）
   fctx.moveTo(sx, topY);
   fctx.lineTo(sx, botY);
+  // クロスバー
   fctx.moveTo(sx, topY);
   fctx.lineTo(sx, barZ);
+  // 右ポスト（正面）→簡易的に同じ位置に描画（左右は俯瞰で表現）
   fctx.moveTo(sx, botY);
   fctx.lineTo(sx, barZ);
   fctx.stroke();
+}
 
-  // GK投影
-  const offsetY = (top.height-pitchW)/2;
-  const gTop3D = projectToGoalPlane(gk.x, gk.y+offsetY, GK_HEIGHT);
-  const gBot3D = projectToGoalPlane(gk.x, gk.y+offsetY, 0);
+/* ============================
+   GK・ボール投影（正面図）
+============================ */
+function drawGKFront(){
+  // GKの上端・下端を3D→2D投影
+  const gTop3D = projectToGoalPlane(gk.x, gk.y, GK_HEIGHT);
+  const gBot3D = projectToGoalPlane(gk.x, gk.y, 0);
+
   const gMidZ = (gTop3D.z + gBot3D.z)/2;
   const gH = Math.abs(gTop3D.z - gBot3D.z);
-  const gW = GK_WIDTH * scaleY * 3;
+
+  const gw = goalWidth;
+  const scaleY = front.height / (gw*1.5);
+  const gW = GK_WIDTH * scaleY * 3; // 少し強調
 
   fctx.fillStyle="#03a9f4";
-  fctx.fillRect(sx - gW/2, gMidZ - gH/2, gW, gH);
+  fctx.fillRect(front.width*0.5 - gW/2, gMidZ - gH/2, gW, gH);
+}
 
-  // ボール投影
-  const b3D = projectToGoalPlane(ball.x, ball.y+offsetY, BALL_DIAM/2);
+function drawBallFront(){
+  const b3D = projectToGoalPlane(ball.x, ball.y, BALL_DIAM/2);
   fctx.fillStyle="red";
   fctx.beginPath();
   fctx.arc(b3D.x, b3D.z, 4, 0, Math.PI*2);
@@ -224,10 +300,9 @@ function drawFront(){
 }
 
 /* ============================
-   状態表示
+   状態表示（距離・姿勢）
 ============================ */
 function updateState(){
-  const offsetY = (top.height-pitchW)/2;
   const distPx = Math.hypot(ball.x - gk.x, ball.y - gk.y);
   const distM = distPx / M;
 
@@ -236,15 +311,24 @@ function updateState(){
   else if(distM >=5.0 && distM<=5.5){ posture="やや低い構え"; action="フロントダイブで奪う距離"; }
   else{ posture="低い構え（ブロッキング）"; action="ブロッキングで対応すべき距離"; }
 
-  stateDiv.textContent = `ボールとの距離: ${distM.toFixed(2)}m ｜ 姿勢: ${posture} ｜ アクション: ${action}`;
+  stateDiv.textContent =
+    `ボールとの距離: ${distM.toFixed(2)}m ｜ 姿勢: ${posture} ｜ アクション: ${action}`;
 }
 
 /* ============================
    全描画
 ============================ */
 function drawAll(){
-  drawTop();
-  drawFront();
+  drawPitchTop();
+  drawShootingLinesTop();
+  drawGKHorizontalCoverageTop();
+  drawBallTop();
+  drawGKTop();
+
+  drawGoalFront();
+  drawGKFront();
+  drawBallFront();
+
   updateState();
 }
 
@@ -254,21 +338,19 @@ function drawAll(){
 top.addEventListener("mousedown",e=>{
   const r=top.getBoundingClientRect();
   const x=e.clientX-r.left, y=e.clientY-r.top;
-  const offsetY=(top.height-pitchW)/2;
 
-  if(Math.hypot(x-ball.x,y-(ball.y+offsetY))<15) dragBall=true;
-  else if(Math.hypot(x-gk.x,y-(gk.y+offsetY))<20) dragGK=true;
+  if(Math.hypot(x-ball.x,y-ball.y)<15) dragBall=true;
+  else if(Math.hypot(x-gk.x,y-gk.y)<20) dragGK=true;
 });
 
 top.addEventListener("mousemove",e=>{
   const r=top.getBoundingClientRect();
   const x=e.clientX-r.left, y=e.clientY-r.top;
-  const offsetY=(top.height-pitchW)/2;
 
   if(dragBall){
-    ball.x=x; ball.y=y-offsetY;
+    ball.x=x; ball.y=y;
   }else if(dragGK){
-    gk.x=x; gk.y=y-offsetY;
+    gk.x=x; gk.y=y;
   }
 });
 
